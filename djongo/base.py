@@ -1,6 +1,9 @@
 """
 MongoDB database backend for Django
 """
+
+# THIS FILE WAS CHANGED ON - 05 Sep 2022
+
 import traceback
 from collections import OrderedDict
 from logging import getLogger
@@ -235,32 +238,29 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         pass
 
     def _savepoint(self, sid):
+        # add _savepoint method to work with Django's transactions
         self.in_atomic_block = True
         self.transaction = Transaction(self.client_connection)
-        # self.client_connection = self.transaction.session.client
         connection_params = self.get_connection_params()
 
         name = connection_params.pop('name')
-        # es = connection_params.pop('enforce_schema')
 
-        # connection_params['document_class'] = OrderedDict
-
-        # self.connection = self.transaction.__session.client[name]
+        # this will be used in sql2mongo/query.py as session parameter when using pymongo CRUD operations
         self.djongo_connection.session = self.transaction.session
-        # self.client_connection[name]._session = self.transaction.session  # noqa
+        # this will be used in models/fields.py as session parameter when using pymongo CRUD operations
+        # in that file pymongo functions are prefixed with 'mongo_'
         self.client_connection[name].__setattr__('session', self.transaction.session)
-        # print(f'\n///////////////////self.client_connection[name].__name: {self.client_connection[name].__getattribute__("session")}//////////////////////\n')
-        # self.client_connection = self.transaction.__session.client
 
 
     def _savepoint_commit(self, sid):
+        # add _savepoint_commit method to work with Django's transactions
+        # this method is executed even if rollback is executed after it
         if not self.rollbacked:
             self.transaction.__exit__(None, None, traceback)
         self.djongo_connection = DjongoClient(self.connection, self.get_connection_params().get('enforce_schema'))
 
     def _savepoint_rollback(self, sid):
         self.rollbacked = True
+        # We have to pass in some error, but it is not used anywhere as far as known
         self.transaction.__exit__('DatabaseError', DatabaseError('Error in transaction; rollbacked'), traceback)
-        # self.transaction.session.abort_transaction()
-        # self.transaction.rollbacked = True
-        # self.djongo_connection = DjongoClient(self.connection, self.get_connection_params().get('enforce_schema'))
+

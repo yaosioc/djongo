@@ -3,7 +3,7 @@ Module with constants and mappings to build MongoDB queries from
 SQL constructors.
 """
 
-# THIS FILE WAS CHANGED ON - 19 Aug 2022
+# THIS FILE WAS CHANGED ON - 05 Sep 2022
 
 import abc
 import re

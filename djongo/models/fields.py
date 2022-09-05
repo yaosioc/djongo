@@ -13,7 +13,7 @@ MongoDB is defined.
 These are the main fields for working with MongoDB.
 """
 
-# THIS FILE WAS CHANGED ON - 28 Mar 2022
+# THIS FILE WAS CHANGED ON - 05 Sep 2022
 
 import functools
 import json
@@ -870,8 +870,6 @@ def create_forward_array_reference_manager(superclass, rel):
             fks.update(new_fks)
 
             db = router.db_for_write(self.instance.__class__, instance=self.instance)
-            print(f'\n/////////pymongo_connection: {pymongo_connections[self.db]}////////\n')
-            print(f'\n//////////_client._session: {pymongo_connections[self.db].djongo_connection.session}////////\n')
             self.instance_manager.db_manager(db).mongo_update_one(
                 self._make_filter(),
                 {
