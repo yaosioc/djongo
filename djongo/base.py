@@ -255,9 +255,12 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def _savepoint_commit(self, sid):
         # add _savepoint_commit method to work with Django's transactions
         # this method is executed even if rollback is executed after it
+        connection_params = self.get_connection_params()
+        name = connection_params.pop('name')
         if not self.rollbacked:
             self.transaction.__exit__(None, None, traceback)
         self.djongo_connection = DjongoClient(self.connection, self.get_connection_params().get('enforce_schema'))
+        self.client_connection[name].__setattr__('session', None)
 
     def _savepoint_rollback(self, sid):
         self.rollbacked = True
