@@ -238,7 +238,7 @@ class SelectQuery(DQLQuery):
     def _get_cursor(self):
         if self._needs_aggregation():
             pipeline = self._make_pipeline()
-            cur = self.db[self.left_table].aggregate(pipeline)
+            cur = self.db[self.left_table].aggregate(pipeline, session=self.connection_properties.session)
             logger.debug(f'Aggregation query: {pipeline}')
         else:
             kwargs = {}
@@ -257,7 +257,7 @@ class SelectQuery(DQLQuery):
             if self.offset:
                 kwargs.update(self.offset.to_mongo())
 
-            cur = self.db[self.left_table].find(**kwargs)
+            cur = self.db[self.left_table].find(**kwargs, session=self.connection_properties.session)
             logger.debug(f'Find query: {kwargs}')
 
         return cur
@@ -330,7 +330,7 @@ class UpdateQuery(DMLQuery):
 
     def execute(self):
         db = self.db
-        self.result = db[self.left_table].update_many(**self.kwargs)
+        self.result = db[self.left_table].update_many(**self.kwargs , session=self.connection_properties.session)
         logger.debug(f'update_many: {self.result.modified_count}, matched: {self.result.matched_count}')
 
 
@@ -388,7 +388,8 @@ class InsertQuery(DMLQuery):
                 }
             },
             {'$inc': {'auto.seq': num}},
-            return_document=ReturnDocument.AFTER
+            return_document=ReturnDocument.AFTER,
+            session=self.connection_properties.session
         )
 
         for i, val in enumerate(self._values):
@@ -403,7 +404,7 @@ class InsertQuery(DMLQuery):
                 ins[_field] = value
             docs.append(ins)
 
-        res = self.db[self.left_table].insert_many(docs, ordered=False)
+        res = self.db[self.left_table].insert_many(docs, ordered=False, session=self.connection_properties.session)
         if auto:
             self._result_ref.last_row_id = auto['auto']['seq']
         else:
@@ -479,11 +480,12 @@ class AlterQuery(DDLQuery):
                 '$rename': {
                     self._old_name: self._new_name
                 }
-            }
+            },
+            session=self.connection_properties.session
         )
 
     def _rename_collection(self):
-        self.db[self.left_table].rename(self._new_name)
+        self.db[self.left_table].rename(self._new_name, session=self.connection_properties.session)
 
     def _alter(self, statement: SQLStatement):
         self.execute = lambda: None
@@ -510,7 +512,7 @@ class AlterQuery(DDLQuery):
         print_warn(feature)
 
     def _flush(self):
-        self.db[self.left_table].delete_many({})
+        self.db[self.left_table].delete_many({}, session=self.connection_properties.session)
 
     def _table(self, statement: SQLStatement):
         tok = statement.next()
@@ -535,7 +537,7 @@ class AlterQuery(DDLQuery):
                 raise SQLDecodeError
 
     def _drop_index(self):
-        self.db[self.left_table].drop_index(self._iden_name)
+        self.db[self.left_table].drop_index(self._iden_name, session=self.connection_properties.session)
 
     def _drop_column(self):
         self.db[self.left_table].update_many(
@@ -544,7 +546,8 @@ class AlterQuery(DDLQuery):
                 '$unset': {
                     self._iden_name: ''
                 }
-            }
+            },
+            session=self.connection_properties.session
         )
         self.db['__schema__'].update_one(
             {'name': self.left_table},
@@ -552,7 +555,8 @@ class AlterQuery(DDLQuery):
                 '$unset': {
                     f'fields.{self._iden_name}': ''
                 }
-            }
+            },
+            session=self.connection_properties.session
         )
 
     def _add(self, statement: SQLStatement):
@@ -618,7 +622,8 @@ class AlterQuery(DDLQuery):
                 '$set': {
                     self._iden_name: self._default
                 }
-            }
+            },
+            session=self.connection_properties.session
         )
         self.db['__schema__'].update_one(
             {'name': self.left_table},
@@ -628,19 +633,24 @@ class AlterQuery(DDLQuery):
                         'type_code': self._type_code
                     }
                 }
-            }
+            },
+            session=self.connection_properties.session
         )
 
     def _index(self):
         self.db[self.left_table].create_index(
             self.field_dir,
-            name=self._iden_name)
+            name=self._iden_name,
+            session=self.connection_properties.session
+        )
 
     def _unique(self):
         self.db[self.left_table].create_index(
             self.field_dir,
             unique=True,
-            name=self._iden_name)
+            name=self._iden_name,
+            session=self.connection_properties.session
+        )
 
     def _fk(self):
         pass
@@ -653,15 +663,15 @@ class CreateQuery(DDLQuery):
 
     def _create_table(self, statement):
         if '__schema__' not in self.connection_properties.cached_collections:
-            self.db.create_collection('__schema__')
+            self.db.create_collection('__schema__', session=self.connection_properties.session)
             self.connection_properties.cached_collections.add('__schema__')
-            self.db['__schema__'].create_index('name', unique=True)
-            self.db['__schema__'].create_index('auto')
+            self.db['__schema__'].create_index('name', unique=True, session=self.connection_properties.session)
+            self.db['__schema__'].create_index('auto', session=self.connection_properties.session)
 
         tok = statement.next()
         table = SQLToken.token2sql(tok, self).table
         try:
-            self.db.create_collection(table)
+            self.db.create_collection(table, session=self.connection_properties.session)
         except CollectionInvalid:
             if self.connection_properties.enforce_schema:
                 raise
@@ -708,10 +718,12 @@ class CreateQuery(DDLQuery):
                     _set['auto.seq'] = 0
 
                 if SQLColumnDef.primarykey in col.col_constraints:
-                    self.db[table].create_index(field, unique=True, name='__primary_key__')
+                    self.db[table].create_index(field, unique=True, name='__primary_key__',
+                                                session=self.connection_properties.session)
 
                 if SQLColumnDef.unique in col.col_constraints:
-                    self.db[table].create_index(field, unique=True)
+                    self.db[table].create_index(field, unique=True,
+                                                session=self.connection_properties.session)
 
                 if (SQLColumnDef.not_null in col.col_constraints or
                         SQLColumnDef.null in col.col_constraints):
@@ -725,7 +737,8 @@ class CreateQuery(DDLQuery):
             self.db['__schema__'].update_one(
                 filter=_filter,
                 update=update,
-                upsert=True
+                upsert=True,
+                session=self.connection_properties.session,
             )
 
     def parse(self):
@@ -762,7 +775,7 @@ class DeleteQuery(DMLQuery):
 
     def execute(self):
         db_con = self.db
-        self.result = db_con[self.left_table].delete_many(**self.kw)
+        self.result = db_con[self.left_table].delete_many(**self.kw, session=self.connection_properties.session)
         logger.debug('delete_many: {}'.format(self.result.deleted_count))
 
     def count(self):
@@ -976,7 +989,7 @@ class Query:
         elif tok.match(tokens.Keyword, 'TABLE'):
             tok = statement.next()
             table_name = tok.get_name()
-            self.db.drop_collection(table_name)
+            self.db.drop_collection(table_name, session=self.connection_properties.session)
         else:
             raise SQLDecodeError('statement:{}'.format(sm))
 

@@ -1,6 +1,7 @@
 """
 MongoDB database backend for Django
 """
+import traceback
 from collections import OrderedDict
 from logging import getLogger
 from django.db.backends.base.base import BaseDatabaseWrapper
@@ -10,10 +11,12 @@ from django.db.utils import Error
 from .creation import DatabaseCreation
 from . import database as Database
 from .cursor import Cursor
+from .database import DatabaseError
 from .features import DatabaseFeatures
 from .introspection import DatabaseIntrospection
 from .operations import DatabaseOperations
 from .schema import DatabaseSchemaEditor
+from .transaction import Transaction
 
 logger = getLogger(__name__)
 
@@ -34,9 +37,10 @@ class CachedCollections(set):
 
 class DjongoClient:
 
-    def __init__(self, database, enforce_schema=True):
+    def __init__(self, database, enforce_schema=True, session=None):
         self.enforce_schema = enforce_schema
         self.cached_collections = CachedCollections(database)
+        self.session = session
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):
@@ -115,6 +119,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def __init__(self, *args, **kwargs):
         self.client_connection = None
         self.djongo_connection = None
+        self.transaction = None
+        self.rollbacked = False
         super().__init__(*args, **kwargs)
 
     def is_usable(self):
@@ -187,7 +193,14 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         TODO: For future reference, setting two phase commits and rollbacks
         might require populating this method.
         """
-        pass
+        self.autocommit = False
+
+    def set_autocommit(
+        self, autocommit, force_begin_transaction_with_broken_autocommit=False
+    ):
+        result = super().set_autocommit(autocommit, force_begin_transaction_with_broken_autocommit=False)
+        self.autocommit = False
+        return result
 
     def init_connection_state(self):
         try:
@@ -220,3 +233,34 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         TODO: two phase commits are not supported yet.
         """
         pass
+
+    def _savepoint(self, sid):
+        self.in_atomic_block = True
+        self.transaction = Transaction(self.client_connection)
+        # self.client_connection = self.transaction.session.client
+        connection_params = self.get_connection_params()
+
+        name = connection_params.pop('name')
+        # es = connection_params.pop('enforce_schema')
+
+        # connection_params['document_class'] = OrderedDict
+
+        # self.connection = self.transaction.__session.client[name]
+        self.djongo_connection.session = self.transaction.session
+        # self.client_connection[name]._session = self.transaction.session  # noqa
+        self.client_connection[name].__setattr__('session', self.transaction.session)
+        # print(f'\n///////////////////self.client_connection[name].__name: {self.client_connection[name].__getattribute__("session")}//////////////////////\n')
+        # self.client_connection = self.transaction.__session.client
+
+
+    def _savepoint_commit(self, sid):
+        if not self.rollbacked:
+            self.transaction.__exit__(None, None, traceback)
+        self.djongo_connection = DjongoClient(self.connection, self.get_connection_params().get('enforce_schema'))
+
+    def _savepoint_rollback(self, sid):
+        self.rollbacked = True
+        self.transaction.__exit__('DatabaseError', DatabaseError('Error in transaction; rollbacked'), traceback)
+        # self.transaction.session.abort_transaction()
+        # self.transaction.rollbacked = True
+        # self.djongo_connection = DjongoClient(self.connection, self.get_connection_params().get('enforce_schema'))

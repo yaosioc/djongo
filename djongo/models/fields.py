@@ -781,7 +781,8 @@ def create_reverse_array_reference_manager(superclass, rel):
                         lh_field.get_attname():
                             getattr(self.instance, rh_field.get_attname())
                     }
-                }
+                },
+                session=pymongo_connections[self.db].djongo_connection.session
             )
             for obj in objs:
                 fk_field = getattr(obj, lh_field.get_attname())
@@ -869,6 +870,8 @@ def create_forward_array_reference_manager(superclass, rel):
             fks.update(new_fks)
 
             db = router.db_for_write(self.instance.__class__, instance=self.instance)
+            print(f'\n/////////pymongo_connection: {pymongo_connections[self.db]}////////\n')
+            print(f'\n//////////_client._session: {pymongo_connections[self.db].djongo_connection.session}////////\n')
             self.instance_manager.db_manager(db).mongo_update_one(
                 self._make_filter(),
                 {
@@ -877,7 +880,8 @@ def create_forward_array_reference_manager(superclass, rel):
                             '$each': list(new_fks)
                         }
                     }
-                }
+                },
+                session=pymongo_connections[self.db].djongo_connection.session
             )
 
         add.alters_data = True
@@ -903,7 +907,8 @@ def create_forward_array_reference_manager(superclass, rel):
                             '$in': list(to_del)
                         }
                     }
-                }
+                },
+                session=pymongo_connections[self.db].djongo_connection.session
             )
 
         def clear(self):
@@ -914,7 +919,8 @@ def create_forward_array_reference_manager(superclass, rel):
                     '$set': {
                         self.field.attname: []
                     }
-                }
+                },
+                session=pymongo_connections[self.db].djongo_connection.session
             )
             setattr(self.instance, self.field.attname, set())
 

@@ -55,7 +55,7 @@ class Cursor:
                 sql,
                 params)
         except Exception as e:
-            db_exe = DatabaseError()
+            db_exe = DatabaseError(str(e))
             raise db_exe from e
 
     def fetchmany(self, size=1):
