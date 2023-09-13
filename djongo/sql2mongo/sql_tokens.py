@@ -93,7 +93,6 @@ class AliasableToken(SQLToken):
 
     @property
     def alias(self) -> str:
-        # bug fix sql parse
         if not self._token.get_ordering():
             return self._token.get_alias()
 
