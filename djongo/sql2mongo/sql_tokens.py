@@ -33,6 +33,7 @@ class SQLToken:
                    ) -> Iterator[all_token_types]:
         from .functions import SQLFunc
         if isinstance(token, Identifier):
+            # Bug fix for sql parse
             if isinstance(token[0], Parenthesis):
                 try:
                     int(token[0][1].value)
@@ -93,6 +94,7 @@ class AliasableToken(SQLToken):
 
     @property
     def alias(self) -> str:
+        # bug fix sql parse
         if not self._token.get_ordering():
             return self._token.get_alias()
 
