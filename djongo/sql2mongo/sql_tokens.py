@@ -33,6 +33,9 @@ class SQLToken:
                    ) -> Iterator[all_token_types]:
         from .functions import SQLFunc
         if isinstance(token, Identifier):
+            # a = SQLIdentifier(token, query)
+            # if str(a) == '%(0)s AS "a"':
+            #     print(a)
             # Bug fix for sql parse
             if isinstance(token[0], Parenthesis):
                 try:
@@ -130,7 +133,8 @@ class SQLIdentifier(AliasableToken):
         name = self.given_table
         alias2token = self.token_alias.alias2token
         try:
-            return alias2token[name].table
+            if not self.is_explicit_alias():
+                return alias2token[name].table
         except KeyError:
             return name
 
