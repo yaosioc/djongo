@@ -33,10 +33,6 @@ class SQLToken:
                    ) -> Iterator[all_token_types]:
         from .functions import SQLFunc
         if isinstance(token, Identifier):
-            # a = SQLIdentifier(token, query)
-            # if str(a) == '%(0)s AS "a"':
-            #     print(a)
-            # Bug fix for sql parse
             if isinstance(token[0], Parenthesis):
                 try:
                     int(token[0][1].value)
